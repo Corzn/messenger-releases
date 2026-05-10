@@ -1,0 +1,40 @@
+name: Generate Update Feed
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-feed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download RELEASES from this release and rewrite URLs
+        run: |
+          OWNER="Corzn"
+          REPO="messenger-releases"
+          TAG="${{ github.event.release.tag_name }}"
+          BASE_URL="https://github.com/$OWNER/$REPO/releases/download/$TAG/"
+
+          # Download the RELEASES file that was just uploaded to this release
+          curl -sL "https://github.com/$OWNER/$REPO/releases/download/$TAG/RELEASES" -o RELEASES_raw
+
+          # Replace bare nupkg filenames with full GitHub download URLs
+          # Input:  SHA1 messenger_app-1.0.2-full.nupkg 139169023
+          # Output: SHA1 https://github.com/.../download/v1.0.2/messenger_app-1.0.2-full.nupkg 139169023
+          sed -E "s|^(\S+) (messenger_app[^ ]+\.nupkg) (\S+)$|\1 ${BASE_URL}\2 \3|" RELEASES_raw > RELEASES
+
+          echo "Generated RELEASES:"
+          cat RELEASES
+
+      - name: Commit updated RELEASES to main branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add RELEASES
+          git diff --staged --quiet || git commit -m "chore: update feed for ${{ github.event.release.tag_name }}"
+          git push
